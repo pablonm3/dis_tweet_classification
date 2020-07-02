@@ -4,9 +4,7 @@ import torch.nn as nn
 import torch.utils.data
 from transformers import GPT2Tokenizer, GPT2Model
 import random
-from spacy.util import minibatch, compounding
-import numpy as np
-from sklearn.base import TransformerMixin, BaseEstimator
+from spacy.util import minibatch
 import pandas as pd
 from typing import List, Tuple
 

@@ -68,7 +68,7 @@ class GPT2ClassifierTestCase(unittest.TestCase):
         self.X_train_text = train_df['text'].tolist()[0:100]
 
     def test_finish_ok(self):
-        classifier = GPT2Classifier(max_iter=1, batch_size=32)
+        classifier = GPT2Classifier(max_iter=1, batch_size=32, finetune_GPT2=False)
         classifier.fit(self.X_train_text, self.y_train)
         breakpoint()
         predictions = classifier.predict(self.X_train_text)

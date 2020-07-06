@@ -112,19 +112,43 @@ class GPT2Classifier(TorchModelBase):
                  finetune_GPT2=True,
                  checkpoint_path=None,
                  base_dir='./',
+                 classes=None,
                  **kwargs
                  ):
         self.model_name = model_name
         self.embed_dim = embed_dim
         self.max_seq_length = max_seq_length
         self.finetune_GPT2 = finetune_GPT2
-        self.model = None # call fit() to set this
-        self.tokenizer = None  # call fit() to set this
-        self.classes = None # call fit() to set this
+        self.classes = classes
         self.checkpoint_path = checkpoint_path
         self.base_dir = base_dir
         super(GPT2Classifier, self).__init__(**kwargs)
         self.params += ['model_name']
+        if self.classes:
+            self.load_model()
+        else:
+            self.model = None # call fit() to set this
+
+    def load_model(self):
+        self.model = GPT2SequenceClassifierModel(
+            hidden_size=self.embed_dim,
+            num_classes=len(self.classes),
+            gpt_model_name=self.model_name,
+            max_seq_length=self.max_seq_length,
+            finetune_GPT2=self.finetune_GPT2
+        )
+        self.model.to(device)
+        self.opt = self.optimizer(
+            self.model.parameters()
+        )
+        if (self.checkpoint_path):
+            # grab model and optimizer from checkpoint
+            model_chk, opt_chk, self.current_ephoc = self.load_checkpoint()
+            print("continuing training from checkpoint at ephoc: ", self.current_ephoc)
+            self.model.load_state_dict(model_chk)
+            self.opt.load_state_dict(opt_chk)
+        else:
+            self.current_ephoc = 0
 
     def fit(self, X, y):
         """Standard `fit` method.
@@ -139,28 +163,12 @@ class GPT2Classifier(TorchModelBase):
 
         """
         self.classes = list(set(y))
-        self.model = GPT2SequenceClassifierModel(
-            hidden_size=self.embed_dim,
-            num_classes=len(self.classes),
-            gpt_model_name=self.model_name,
-            max_seq_length=self.max_seq_length,
-            finetune_GPT2=self.finetune_GPT2
-        )
-        self.opt = self.optimizer(
-            self.model.parameters()
-        )
-        current_ephoc = 0
-        if(self.checkpoint_path):
-            # grab model and optimizer from checkpoint
-            model_chk, opt_chk, current_ephoc = self.load_checkpoint()
-            print("continuing training from checkpoint at ephoc: ", current_ephoc)
-            self.model.load_state_dict(model_chk)
-            self.opt.load_state_dict(opt_chk)
-        self.model.to(device)
+        if(not self.model):
+            self.load_model()
         self.model.train()
         loss = nn.CrossEntropyLoss()
         print("Training... max iters: ", self.max_iter)
-        for ephoc in (range(self.max_iter) + current_ephoc):
+        for ephoc in (range(self.current_ephoc, self.max_iter)):
             print("ephoc no: ", ephoc)
             zipped_data = list(zip(X,y))
             random.shuffle(zipped_data)
@@ -173,13 +181,14 @@ class GPT2Classifier(TorchModelBase):
                 self.opt.zero_grad()
                 err.backward()
                 self.opt.step()
+            self.current_ephoc = ephoc + 1
             # save checkpoint
-            checkpoint = {"model": self.model.state_dict(), "optimizer": self.opt.state_dict(), "ephoc": ephoc+1}
+            checkpoint = {"model": self.model.state_dict(), "optimizer": self.opt.state_dict(), "ephoc": self.current_ephoc}
             self.save_checkpoint(checkpoint)
         return self
 
     def save_checkpoint(self, checkpoint):
-        path = self.base_dir + "/" + "GPT2_CLS_CHECKPOINT_ephoc" + str(checkpoint["ephoc"]) + "pth.tar"
+        path = self.base_dir + "/" + "GPT2_CLS_CHECKPOINT_ephoc" + str(checkpoint["ephoc"]) + ".pth.tar"
         print("saving checkpoint to file: ", path)
         torch.save(checkpoint, path)
 
@@ -203,7 +212,7 @@ class GPT2Classifier(TorchModelBase):
         self.model.eval()
         with torch.no_grad():
             preds = self.model(X)
-            preds = preds.numpy()
+            preds = preds.cpu().numpy()
             return preds
 
     def predict(self, X):

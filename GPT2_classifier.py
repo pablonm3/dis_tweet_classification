@@ -215,7 +215,7 @@ class GPT2Classifier(TorchModelBase):
             preds = preds.cpu().numpy()
             return preds
 
-    def predict(self, X):
+    def predict(self, X, batch_size=32):
         """Predicted labels for the examples in `X`. These are converted
         from the integers that PyTorch needs back to their original
         values in `self.classes_`.
@@ -223,11 +223,17 @@ class GPT2Classifier(TorchModelBase):
         Parameters
         ----------
         X : np.array
+        batch_size: batch size to load on mem, dataset may be too big to fit it entirely on mem
 
         Returns
         -------
         list of length len(X)
 
         """
-        probs = self.predict_proba(X)
-        return [self.classes[i] for i in probs.argmax(axis=1)]
+        batches = minibatch(X, size=batch_size)
+        predictions = []
+        for batch in batches:
+            probs = self.predict_proba(batch)
+            batch_predictions = [self.classes[i] for i in probs.argmax(axis=1)]
+            predictions = predictions + batch_predictions
+        return predictions

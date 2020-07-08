@@ -7,6 +7,8 @@ import random
 from spacy.util import minibatch
 import pandas as pd
 from typing import List, Tuple
+from apex import amp
+from transformers import AdamW
 if torch.cuda.is_available():
     device = torch.device("cuda:0")  # you can continue going on here, like cuda:1 cuda:2....etc.
     print("Running on the GPU")
@@ -111,10 +113,12 @@ class GPT2Classifier(TorchModelBase):
                  max_seq_length=1024,
                  finetune_GPT2=True,
                  checkpoint_path=None,
-                 base_dir='./',
+                 base_dir='.',
                  classes=None,
+                 fp16=False,
                  **kwargs
                  ):
+        self.fp16 = fp16
         self.model_name = model_name
         self.embed_dim = embed_dim
         self.max_seq_length = max_seq_length
@@ -143,12 +147,22 @@ class GPT2Classifier(TorchModelBase):
         )
         if (self.checkpoint_path):
             # grab model and optimizer from checkpoint
-            model_chk, opt_chk, self.current_ephoc = self.load_checkpoint()
+            model_chk, opt_chk, self.current_ephoc, amp_chk = self.load_checkpoint()
             print("continuing training from checkpoint at ephoc: ", self.current_ephoc)
             self.model.load_state_dict(model_chk)
             self.opt.load_state_dict(opt_chk)
+            if(amp_chk):
+                amp.load_state_dict(amp_chk)
         else:
             self.current_ephoc = 0
+        if self.fp16:
+            # inspired by: https://github.com/huggingface/transformers/blob/master/examples/question-answering/run_squad.py
+            # Before we do anything with models, we want to ensure that we get fp16 execution of torch.einsum if fp16 is set.
+            # Otherwise it'll default to "promote" mode, and we'll get fp32 operations. Note that running `--fp16_opt_level="O2"` will
+            # remove the need for this code, but it is still valid.
+            amp.register_half_function(torch, "einsum")
+            print("Converting models and optimizer to FP16")
+            self.model, self.opt = amp.initialize(self.model, self.opt, opt_level="O1")
 
     def fit(self, X, y):
         """Standard `fit` method.
@@ -177,13 +191,20 @@ class GPT2Classifier(TorchModelBase):
                 X_batch, y_batch = zip(*batch)
                 batch_preds = self.model(X_batch)
                 err = loss(batch_preds, torch.LongTensor(y_batch).to(device))
+                print('err: ', err)
                 # Backprop:
                 self.opt.zero_grad()
-                err.backward()
+                if self.fp16:
+                    with amp.scale_loss(err, self.opt) as scaled_loss:
+                        scaled_loss.backward()
+                else:
+                    err.backward()
                 self.opt.step()
             self.current_ephoc = ephoc + 1
             # save checkpoint
             checkpoint = {"model": self.model.state_dict(), "optimizer": self.opt.state_dict(), "ephoc": self.current_ephoc}
+            if(self.fp16):
+                checkpoint["amp"] = amp.state_dict()
             self.save_checkpoint(checkpoint)
         return self
 
@@ -194,8 +215,10 @@ class GPT2Classifier(TorchModelBase):
 
     def load_checkpoint(self):
         print("loading checkpoint from: ", self.checkpoint_path)
-        checkpoint = torch.load(self.checkpoint_path)
-        return checkpoint["model"], checkpoint["optimizer"], checkpoint["ephoc"]
+        checkpoint = torch.load(self.checkpoint_path, map_location=device)
+        if amp not in checkpoint:
+            checkpoint["amp"] = None
+        return checkpoint["model"], checkpoint["optimizer"], checkpoint["ephoc"], checkpoint["amp"]
 
     def predict_proba(self, X):
         """Predicted probabilities for the examples in `X`.

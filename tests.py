@@ -68,12 +68,15 @@ class GPT2ClassifierTestCase(unittest.TestCase):
         self.X_train_text = train_df['text'].tolist()[0:100]
 
     def test_finish_ok(self):
-        classifier = GPT2Classifier(max_iter=1, batch_size=32, finetune_GPT2=False)
-        classifier.fit(self.X_train_text, self.y_train)
-        breakpoint()
-        predictions = classifier.predict(self.X_train_text)
-        breakpoint()
-        print(classification_report(self.y_train, predictions))
+        gpt2_df = train_df
+        X_train_text = gpt2_df['text'].tolist()[:100]
+        y_train = gpt2_df['target'].tolist()[:100]
+
+        classifier = GPT2Classifier(max_iter=10, batch_size=3, finetune_GPT2=True,
+                                    classes=[0,1], checkpoint_path=None)
+        classifier.fit(X_train_text, y_train)
+        predictions = classifier.predict(X_train_text)
+        print(classification_report(y_train, predictions))
         self.assertEqual(True, True)
 
 

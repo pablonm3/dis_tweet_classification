@@ -3,3 +3,4 @@ cache_dir/
 outputs/
 __pycache__/
 transformers/
+models/

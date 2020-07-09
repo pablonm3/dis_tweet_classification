@@ -1,1 +1,1 @@
-# dis_tweet_classification
+In this Kaggle competition for tweet classification I explored and compared Machine Learning models ranging from good old shallow learning(Naive naives, TF-IDF, SVMs) to the state of the art in NLP(GPT2, ROBERTA) and a variety of text preprocessing techniques to obtain high position in the leaderboard of the competition. Notebook w all the code: https://github.com/pablonm3/dis_tweet_classification/blob/master/Exploring%20text%20classification%20methods.ipynb

@@ -83,11 +83,11 @@ class GPT2SequenceClassifierModel(nn.Module):
         """
         if isinstance(text_list, pd.Series):
             text_list = text_list.tolist()
-        if(self.finetune_GPT2):
+        if(self.finetune_GPT2 and self.training):
             gpt_out = self._tokenize_and_predict(text_list)
         else:
             with torch.no_grad():
-                # don't finetune GPT2 to save resources
+                # don't finetune GPT2 to save resources or when making preds
                 gpt_out = self._tokenize_and_predict(text_list)
 
         batch_size = len(text_list)

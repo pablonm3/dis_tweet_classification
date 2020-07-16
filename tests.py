@@ -5,7 +5,6 @@ from sklearn.metrics import classification_report
 from torch_rnn_classifier_attn import TorchRNNClassifier
 from spacy_text_classifier import SpacyClassifier
 from GPT2_classifier import GPT2Classifier
-from spacy_example import main
 import pandas as pd
 import numpy as np
 import torch

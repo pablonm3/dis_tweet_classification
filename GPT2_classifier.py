@@ -7,7 +7,6 @@ import random
 from spacy.util import minibatch
 import pandas as pd
 from typing import List, Tuple
-from apex import amp
 from transformers import AdamW
 if torch.cuda.is_available():
     device = torch.device("cuda:0")  # you can continue going on here, like cuda:1 cuda:2....etc.
@@ -156,6 +155,7 @@ class GPT2Classifier(TorchModelBase):
         else:
             self.current_ephoc = 0
         if self.fp16:
+            from apex import amp
             # inspired by: https://github.com/huggingface/transformers/blob/master/examples/question-answering/run_squad.py
             # Before we do anything with models, we want to ensure that we get fp16 execution of torch.einsum if fp16 is set.
             # Otherwise it'll default to "promote" mode, and we'll get fp32 operations. Note that running `--fp16_opt_level="O2"` will
@@ -216,7 +216,7 @@ class GPT2Classifier(TorchModelBase):
     def load_checkpoint(self):
         print("loading checkpoint from: ", self.checkpoint_path)
         checkpoint = torch.load(self.checkpoint_path, map_location=device)
-        if amp not in checkpoint:
+        if "amp" not in checkpoint:
             checkpoint["amp"] = None
         return checkpoint["model"], checkpoint["optimizer"], checkpoint["ephoc"], checkpoint["amp"]
 
